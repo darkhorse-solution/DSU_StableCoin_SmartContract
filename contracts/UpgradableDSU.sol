@@ -8,7 +8,9 @@ import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
 
 interface IPriceFeed {
     function getChainlinkDataFeedLatestAnswer() external view returns (int);
+    function latestAnswer() external view returns (int);
 }
+
 
 contract DSUStablecoinUpgradeable is ERC20Upgradeable, OwnableUpgradeable, ReentrancyGuardUpgradeable {
     IPriceFeed public priceFeed;
@@ -51,7 +53,15 @@ contract DSUStablecoinUpgradeable is ERC20Upgradeable, OwnableUpgradeable, Reent
     }
 
     function getEthUsdPrice() public view returns (uint256) {
-        int256 price = priceFeed.getChainlinkDataFeedLatestAnswer();
+
+        int256 price;
+
+        if(ethIsNative) {
+            price = priceFeed.latestAnswer();
+        } else {
+            price = priceFeed.getChainlinkDataFeedLatestAnswer();
+        }
+
         require(price > 0, "Invalid ETH/USD price");
         return uint256(price);
     }
