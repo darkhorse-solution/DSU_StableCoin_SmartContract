@@ -16,6 +16,7 @@ contract DSUStablecoin is ERC20, Ownable {
     bool public ethIsNative;
     address public ETHAddress;
     address public feeReceiver;
+    uint256 public fee;
     address public constant BURN_ADDRESS = address(0x000000000000000000000000000000000000dEaD);
 
     event Mint(address indexed to, uint256 dsuAmount);
@@ -33,6 +34,7 @@ contract DSUStablecoin is ERC20, Ownable {
         ethIsNative = _ethIsNative;
         ETHAddress = _ethAddress;
         feeReceiver = _feeReceiver;
+        fee = 1000;
     }
 
 
@@ -61,7 +63,7 @@ contract DSUStablecoin is ERC20, Ownable {
 
         if (ethIsNative) {
             require(msg.value > 0, "Must send ETH");
-            uint256 ethFeeAmount = msg.value / 100;
+            uint256 ethFeeAmount = msg.value / fee;
             uint256 ethBurnAmount = msg.value - ethFeeAmount;
 
             dsuAmount = calculateDsuAmount(ethBurnAmount);
@@ -81,7 +83,7 @@ contract DSUStablecoin is ERC20, Ownable {
             uint256 allowance = ethToken.allowance(msg.sender, address(this));
             require(allowance > _ethAmount, "Must approve ETH tokens");
             
-            uint256 ethFeeAmount = _ethAmount / 100;
+            uint256 ethFeeAmount = _ethAmount / fee;
             uint256 ethBurnAmount = _ethAmount - ethFeeAmount;
             totalAmount = _ethAmount;
             
@@ -113,6 +115,16 @@ contract DSUStablecoin is ERC20, Ownable {
     function updateEthAddress(address _newEthAddress) external onlyOwner {
         require(_newEthAddress != address(0), "Invalid ETH address");
         ETHAddress = _newEthAddress;
+    }
+
+    function updateFeeReceiver(address _feeReceiver) external onlyOwner() {
+        require(_feeReceiver != address(0), "Invalid FeeReceiver address");
+        feeReceiver = _feeReceiver;
+    }
+
+    function updateFee(uint256 _fee) external onlyOwner() {
+        require(_fee > 1, "Fee must be greater than 1");
+        fee = _fee;
     }
     
     function toggleEthIsNative() external onlyOwner {
