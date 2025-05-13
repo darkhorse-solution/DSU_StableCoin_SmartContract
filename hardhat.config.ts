@@ -12,6 +12,11 @@ dotenvConfig();
 
 const config: HardhatUserConfig = {
   networks: {
+    mainnet: {
+      url:"https://mainnet.infura.io/v3/eb89efb7e88e4ba1a49f66f5ca973b29",
+      chainId: 1,
+      accounts: [process.env.PRIVATE_KEY || ""] // Make sure to set your private key in an environment variable
+    },
     bsc: {
       url: "https://bsc-dataseed.binance.org/",
       chainId: 56,
@@ -40,6 +45,7 @@ const config: HardhatUserConfig = {
   },
   etherscan: {
     apiKey: {
+      mainnet: process.env.ETHERSCAN_API_KEY_MAINNET || "",
       bsc: process.env.ETHERSCAN_API_KEY_BSC || "",
       sepolia: process.env.ETHERSCAN_API_KEY || ""
     },
@@ -61,6 +67,7 @@ const config: HardhatUserConfig = {
         enabled: true,
         runs: 200,
       },
+      evmVersion: "paris"
     },
   },
   paths: {
