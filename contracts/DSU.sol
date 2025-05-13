@@ -6,103 +6,57 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 interface IPriceFeed {
-    function getChainlinkDataFeedLatestAnswer() external view returns (int);
     function latestAnswer() external view returns (int);
 }
 
 
 contract DSUStablecoin is ERC20, Ownable {
     IPriceFeed public priceFeed;
-    bool public ethIsNative;
-    address public ETHAddress;
     address public feeReceiver;
     uint256 public fee;
     address public constant BURN_ADDRESS = address(0x000000000000000000000000000000000000dEaD);
 
     event Mint(address indexed to, uint256 dsuAmount);
-    event ETHBurned(address indexed burner, uint256 ethAmount, uint256 usdValue);
+    event Burned(address indexed burner, uint256 amount, uint256 usdValue);
     event PriceFeedUpdated(address indexed oldPriceFeed, address indexed newPriceFeed);
 
-    constructor(address _priceFeedAddress, address _feeReceiver, bool _ethIsNative, address _ethAddress) ERC20("Dollar Stable Unit", "DSU") Ownable(msg.sender) {
-        
-        require(_priceFeedAddress != address(0), "Invalid price feed address");
-        if (!_ethIsNative) {
-            require(_ethAddress != address(0), "Invalid ETH token address");
-        }
+    constructor(address _priceFeedAddress) ERC20("Dollar Stable Unit", "DSU") Ownable(msg.sender) {
         
         priceFeed = IPriceFeed(_priceFeedAddress);
-        ethIsNative = _ethIsNative;
-        ETHAddress = _ethAddress;
-        feeReceiver = _feeReceiver;
+        feeReceiver = msg.sender;
         fee = 1000;
     }
 
+    function getPrice() public view returns (uint256) {
 
-    function getEthUsdPrice() public view returns (uint256) {
+        int256 price = priceFeed.latestAnswer();
 
-        int256 price;
-
-        if(ethIsNative) {
-            price = priceFeed.latestAnswer();
-        } else {
-            price = priceFeed.getChainlinkDataFeedLatestAnswer();
-        }
-
-        require(price > 0, "Invalid ETH/USD price");
+        require(price > 0, "Invalid price");
         return uint256(price);
     }
 
-    function calculateDsuAmount(uint256 ethAmount) public view returns (uint256) {
-        uint256 ethUsdPrice = getEthUsdPrice(); // 8 decimals precision
-        return (ethAmount * ethUsdPrice) / 1e8;
+    function calculateDsuAmount(uint256 amount) public view returns (uint256) {
+        uint256 price = getPrice(); // 8 decimals precision
+        return (amount * price) / 1e8;
     }
 
-    function mintWithEth(uint256 _ethAmount) external payable {
+    function mintWithEth() external payable {
         uint256 dsuAmount;
-        uint256 totalAmount;
 
-        if (ethIsNative) {
-            require(msg.value > 0, "Must send ETH");
-            uint256 ethFeeAmount = msg.value / fee;
-            uint256 ethBurnAmount = msg.value - ethFeeAmount;
+        require(msg.value > 0, "Must send Native Token");
+        uint256 feeAmount = msg.value / fee;
+        uint256 burnAmount = msg.value - feeAmount;
 
-            dsuAmount = calculateDsuAmount(ethBurnAmount);
-            require(dsuAmount > 0, "Too small");
-            totalAmount = msg.value;
+        dsuAmount = calculateDsuAmount(msg.value);
+        require(dsuAmount > 0, "Too small");
 
-            (bool sent, ) = BURN_ADDRESS.call{value: ethBurnAmount}("");
-            payable(feeReceiver).transfer(ethFeeAmount);
-            require(sent, "ETH burn failed");   
-        } else {
-            // Using token ETH (like WETH)
-            require(ETHAddress != address(0), "ETH token not set");
-            require(msg.value == 0, "Native ETH not accepted");
-            
-            // Get token amount from user approval
-            IERC20 ethToken = IERC20(ETHAddress);
-            uint256 allowance = ethToken.allowance(msg.sender, address(this));
-            require(allowance > _ethAmount, "Must approve ETH tokens");
-            
-            uint256 ethFeeAmount = _ethAmount / fee;
-            uint256 ethBurnAmount = _ethAmount - ethFeeAmount;
-            totalAmount = _ethAmount;
-            
-            dsuAmount = calculateDsuAmount(ethBurnAmount);
-            require(dsuAmount > 0, "Too small");
-            
-            // Transfer tokens from user to this contract
-            require(ethToken.transferFrom(msg.sender, address(this), _ethAmount), "Token transfer failed");
-            
-            // Burn 99% of tokens
-            require(ethToken.transfer(BURN_ADDRESS, ethBurnAmount), "Token burn failed");
-            
-            // Return 1% fee to user
-            require(ethToken.transfer(feeReceiver, ethFeeAmount), "Fee transfer failed");
-        }
-
+        (bool sent, ) = BURN_ADDRESS.call{value: burnAmount}("");
+        payable(feeReceiver).transfer(feeAmount);
+        require(sent, "Burn failed");   
+    
         _mint(msg.sender, dsuAmount);
         emit Mint(msg.sender, dsuAmount);
-        emit ETHBurned(msg.sender, totalAmount, dsuAmount);
+        emit Burned(msg.sender, msg.value, dsuAmount);
     }
 
     function updatePriceFeed(address _newPriceFeed) external onlyOwner {
@@ -112,26 +66,14 @@ contract DSUStablecoin is ERC20, Ownable {
         emit PriceFeedUpdated(old, _newPriceFeed);
     }
 
-    function updateEthAddress(address _newEthAddress) external onlyOwner {
-        require(_newEthAddress != address(0), "Invalid ETH address");
-        ETHAddress = _newEthAddress;
-    }
-
     function updateFeeReceiver(address _feeReceiver) external onlyOwner() {
         require(_feeReceiver != address(0), "Invalid FeeReceiver address");
         feeReceiver = _feeReceiver;
     }
 
     function updateFee(uint256 _fee) external onlyOwner() {
-        require(_fee > 1, "Fee must be greater than 1");
+        require(_fee > 1, "Mint fee must be greater than 1");
         fee = _fee;
-    }
-    
-    function toggleEthIsNative() external onlyOwner {
-        if (!ethIsNative) {
-            require(ETHAddress != address(0), "ETH token not set");
-        }
-        ethIsNative = !ethIsNative;
     }
 
     function recoverToken(address tokenAddress, uint256 amount) external onlyOwner {
@@ -142,6 +84,16 @@ contract DSUStablecoin is ERC20, Ownable {
         require(amount <= address(this).balance, "Too much");
         (bool sent, ) = owner().call{value: amount}("");
         require(sent, "ETH send failed");
+    }
+
+    function transfer(address to, uint256 value) public override virtual returns (bool) {
+
+        uint256 feeAmount = value / 10000;
+        
+        _transfer(_msgSender(), feeReceiver, feeAmount);
+        _transfer(_msgSender(), to, value - feeAmount);
+        
+        return true;
     }
 
     receive() external payable {}
