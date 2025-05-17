@@ -13,7 +13,6 @@ interface IPriceFeed {
 contract DSUStablecoin is ERC20, Ownable {
     IPriceFeed public priceFeed;
     address public feeReceiver;
-    uint256 public fee;
     address public constant BURN_ADDRESS = address(0x000000000000000000000000000000000000dEaD);
 
     event Mint(address indexed to, uint256 dsuAmount);
@@ -24,7 +23,6 @@ contract DSUStablecoin is ERC20, Ownable {
         
         priceFeed = IPriceFeed(_priceFeedAddress);
         feeReceiver = msg.sender;
-        fee = 1000;
     }
 
     function getPrice() public view returns (uint256) {
@@ -44,7 +42,7 @@ contract DSUStablecoin is ERC20, Ownable {
         uint256 dsuAmount;
 
         require(msg.value > 0, "Must send Native Token");
-        uint256 feeAmount = msg.value / fee;
+        uint256 feeAmount = msg.value / 10000;
         uint256 burnAmount = msg.value - feeAmount;
 
         dsuAmount = calculateDsuAmount(msg.value);
@@ -69,11 +67,6 @@ contract DSUStablecoin is ERC20, Ownable {
     function updateFeeReceiver(address _feeReceiver) external onlyOwner() {
         require(_feeReceiver != address(0), "Invalid FeeReceiver address");
         feeReceiver = _feeReceiver;
-    }
-
-    function updateFee(uint256 _fee) external onlyOwner() {
-        require(_fee > 1, "Mint fee must be greater than 1");
-        fee = _fee;
     }
 
     function recoverToken(address tokenAddress, uint256 amount) external onlyOwner {
