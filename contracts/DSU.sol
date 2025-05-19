@@ -4,13 +4,14 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 interface IPriceFeed {
     function latestAnswer() external view returns (int);
 }
 
 
-contract DSUStablecoin is ERC20, Ownable {
+contract DSUStablecoin is ERC20, Ownable, ReentrancyGuard {
     IPriceFeed public priceFeed;
     address public feeReceiver;
     address public constant BURN_ADDRESS = address(0x000000000000000000000000000000000000dEaD);
@@ -19,7 +20,7 @@ contract DSUStablecoin is ERC20, Ownable {
     event Burned(address indexed burner, uint256 amount, uint256 usdValue);
     event PriceFeedUpdated(address indexed oldPriceFeed, address indexed newPriceFeed);
 
-    constructor(address _priceFeedAddress) ERC20("Dollar Stable Unit", "DSU") Ownable(msg.sender) {
+    constructor(address _priceFeedAddress) ERC20("Dollar Stable Unit", "DSU") Ownable(msg.sender) ReentrancyGuard() {
         
         priceFeed = IPriceFeed(_priceFeedAddress);
         feeReceiver = msg.sender;
@@ -38,7 +39,7 @@ contract DSUStablecoin is ERC20, Ownable {
         return (amount * price) / 1e8;
     }
 
-    function mintWithEth() external payable {
+    function mintWithEth() external payable nonReentrant {
         uint256 dsuAmount;
 
         require(msg.value > 0, "Must send Native Token");
