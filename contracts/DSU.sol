@@ -18,7 +18,6 @@ contract DSUStablecoin is ERC20, Ownable, ReentrancyGuard {
 
     event Mint(address indexed to, uint256 dsuAmount);
     event Burned(address indexed burner, uint256 amount, uint256 usdValue);
-    event PriceFeedUpdated(address indexed oldPriceFeed, address indexed newPriceFeed);
 
     constructor(address _priceFeedAddress) ERC20("Dollar Stable Unit", "DSU") Ownable(msg.sender) ReentrancyGuard() {
         
@@ -57,18 +56,7 @@ contract DSUStablecoin is ERC20, Ownable, ReentrancyGuard {
         emit Mint(msg.sender, dsuAmount);
         emit Burned(msg.sender, msg.value, dsuAmount);
     }
-
-    function updatePriceFeed(address _newPriceFeed) external onlyOwner {
-        require(_newPriceFeed != address(0), "Invalid price feed address");
-        address old = address(priceFeed);
-        priceFeed = IPriceFeed(_newPriceFeed);
-        emit PriceFeedUpdated(old, _newPriceFeed);
-    }
-
-    function updateFeeReceiver(address _feeReceiver) external onlyOwner() {
-        require(_feeReceiver != address(0), "Invalid FeeReceiver address");
-        feeReceiver = _feeReceiver;
-    }
+    
 
     function recoverToken(address tokenAddress, uint256 amount) external onlyOwner {
         IERC20(tokenAddress).transfer(owner(), amount);
