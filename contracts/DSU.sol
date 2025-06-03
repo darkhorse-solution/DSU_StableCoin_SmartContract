@@ -38,7 +38,7 @@ contract DSUStablecoin is ERC20, Ownable, ReentrancyGuard {
         return (amount * price) / 1e8;
     }
 
-    function mintWithEth() external payable nonReentrant {
+    function mintDSU() external payable nonReentrant {
         uint256 dsuAmount;
 
         require(msg.value > 0, "Must send Native Token");
@@ -57,16 +57,6 @@ contract DSUStablecoin is ERC20, Ownable, ReentrancyGuard {
         emit Burned(msg.sender, msg.value, dsuAmount);
     }
     
-
-    function recoverToken(address tokenAddress, uint256 amount) external onlyOwner {
-        IERC20(tokenAddress).transfer(owner(), amount);
-    }
-
-    function recoverETH(uint256 amount) external onlyOwner {
-        require(amount <= address(this).balance, "Too much");
-        (bool sent, ) = owner().call{value: amount}("");
-        require(sent, "ETH send failed");
-    }
 
     function transfer(address to, uint256 value) public override virtual returns (bool) {
 
