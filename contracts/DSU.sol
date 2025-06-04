@@ -14,15 +14,16 @@ interface IPriceFeed {
 contract DSUStablecoin is ERC20, Ownable, ReentrancyGuard {
     IPriceFeed public priceFeed;
     address public feeReceiver;
+    address public usdtAddress;
     address public constant BURN_ADDRESS = address(0x000000000000000000000000000000000000dEaD);
 
     event Mint(address indexed to, uint256 dsuAmount);
-    event Burned(address indexed burner, uint256 amount, uint256 usdValue);
 
-    constructor(address _priceFeedAddress) ERC20("Dollar Stable Unit", "DSU") Ownable(msg.sender) ReentrancyGuard() {
+    constructor(address _priceFeedAddress, address _usdtAddress) ERC20("Dollar Stable Unit", "DSU") Ownable(msg.sender) ReentrancyGuard() {
         
         priceFeed = IPriceFeed(_priceFeedAddress);
         feeReceiver = msg.sender;
+        usdtAddress = _usdtAddress;
     }
 
     function getPrice() public view returns (uint256) {
@@ -38,23 +39,43 @@ contract DSUStablecoin is ERC20, Ownable, ReentrancyGuard {
         return (amount * price) / 1e8;
     }
 
-    function mintDSU() external payable nonReentrant {
+    function mintDSU(uint256 _amount) external payable nonReentrant {
         uint256 dsuAmount;
 
-        require(msg.value > 0, "Must send Native Token");
-        uint256 feeAmount = msg.value / 10000;
-        uint256 burnAmount = msg.value - feeAmount;
+        if(msg.value > 0) {
+            require(_amount == 0, "Cannot specify amount with ETH");
+            dsuAmount = calculateDsuAmount(msg.value);
+            require(dsuAmount > 0, "Too small");
 
-        dsuAmount = calculateDsuAmount(msg.value);
-        require(dsuAmount > 0, "Too small");
+            uint256 feeAmount = msg.value / 10000;
+            uint256 burnAmount = msg.value - feeAmount;
 
-        (bool sent, ) = BURN_ADDRESS.call{value: burnAmount}("");
-        payable(feeReceiver).transfer(feeAmount);
-        require(sent, "Burn failed");   
+            (bool sent, ) = BURN_ADDRESS.call{value: burnAmount}("");
+            payable(feeReceiver).transfer(feeAmount);
+            require(sent, "Burn failed");
+            
+        } else {
+            require(_amount > 0, "Must specify amount");
+
+            dsuAmount = _amount;
+
+            // Get token amount from user approval
+            IERC20 usdt = IERC20(usdtAddress);
+            uint256 allowance = usdt.allowance(msg.sender, address(this));
+            require(allowance > _amount, "Must approve USDT tokens");
+            
+            uint256 feeAmount = _amount / 10000;
+            uint256 burnAmount = _amount - feeAmount;
+            
+            require(usdt.transferFrom(msg.sender, address(this), _amount), "Token transfer failed");
+            
+            require(usdt.transfer(BURN_ADDRESS, burnAmount), "Token burn failed");
+            
+            require(usdt.transfer(feeReceiver, feeAmount), "Fee transfer failed");
+        }   
     
         _mint(msg.sender, dsuAmount);
         emit Mint(msg.sender, dsuAmount);
-        emit Burned(msg.sender, msg.value, dsuAmount);
     }
     
 
